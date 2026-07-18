@@ -1,10 +1,12 @@
 import { useValues } from 'kea'
+import { useMemo } from 'react'
 
 import { getColorVar } from 'lib/colors'
 import { AppMetricsFilters } from 'lib/components/AppMetrics/AppMetricsFilters'
 import { appMetricsLogic } from 'lib/components/AppMetrics/appMetricsLogic'
 import { AppMetricsTrends } from 'lib/components/AppMetrics/AppMetricsTrends'
 import { AppMetricSummary } from 'lib/components/AppMetrics/AppMetricSummary'
+import { METRIC_COLORS } from 'lib/components/AppMetrics/metricColors'
 
 const HOGFUNCTION_METRIC_KEYS = ['succeeded', 'failed', 'filtered', 'disabled_permanently', 'quota_limited'] as const
 
@@ -12,32 +14,38 @@ export const HOGFUNCTION_METRICS_INFO: Record<string, { name: string; descriptio
     succeeded: {
         name: 'Success',
         description: 'Total number of events processed successfully',
-        color: getColorVar('success'),
+        color: METRIC_COLORS['Success'],
     },
     failed: {
         name: 'Failure',
         description: 'Total number of events that had errors during processing',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Failure'],
     },
     filtered: {
         name: 'Filtered',
         description: 'Total number of events that were filtered out',
-        color: getColorVar('muted'),
+        color: METRIC_COLORS['Filtered'],
     },
     disabled_permanently: {
         name: 'Disabled',
         description:
             'Total number of events that were skipped due to the destination being permanently disabled (due to prolonged issues with the destination)',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Disabled'],
     },
     quota_limited: {
         name: 'Quota Limited',
         description: 'Total number of invocations blocked due to quota limits',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Quota Limited'],
     },
 }
 
-export function HogFunctionMetrics({ id }: { id: string }): JSX.Element {
+export function HogFunctionMetrics({
+    id,
+    seriesColors,
+}: {
+    id: string
+    seriesColors?: Record<string, string>
+}): JSX.Element {
     const logic = appMetricsLogic({
         logicKey: `hog-function-metrics-${id}`,
         loadOnMount: true,
@@ -51,6 +59,21 @@ export function HogFunctionMetrics({ id }: { id: string }): JSX.Element {
     })
 
     const { appMetricsTrends, appMetricsTrendsLoading, getSingleTrendSeries } = useValues(logic)
+
+    // Only destinations pass `seriesColors`; without it the chart is left exactly as before, so the
+    // transformations and site apps that share this component render identically.
+    const trends = useMemo(() => {
+        if (!appMetricsTrends || !seriesColors) {
+            return appMetricsTrends
+        }
+        return {
+            ...appMetricsTrends,
+            series: appMetricsTrends.series.map((series) => ({
+                ...series,
+                name: HOGFUNCTION_METRICS_INFO[series.name]?.name ?? series.name,
+            })),
+        }
+    }, [appMetricsTrends, seriesColors])
 
     return (
         <div className="flex flex-col gap-2">
@@ -73,7 +96,7 @@ export function HogFunctionMetrics({ id }: { id: string }): JSX.Element {
                     />
                 ))}
             </div>
-            <AppMetricsTrends appMetricsTrends={appMetricsTrends} loading={appMetricsTrendsLoading} />
+            <AppMetricsTrends appMetricsTrends={trends} loading={appMetricsTrendsLoading} seriesColors={seriesColors} />
         </div>
     )
 }

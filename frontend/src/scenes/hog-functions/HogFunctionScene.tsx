@@ -17,6 +17,7 @@ import { actionToUrl, router, urlToAction } from 'kea-router'
 import { LemonDivider } from '@posthog/lemon-ui'
 
 import { ActivityLog } from 'lib/components/ActivityLog/ActivityLog'
+import { METRIC_COLORS } from 'lib/components/AppMetrics/metricColors'
 import { NotFound } from 'lib/components/NotFound'
 import { FEATURE_FLAGS } from 'lib/constants'
 import { useFileSystemLogView } from 'lib/hooks/useFileSystemLogView'
@@ -491,7 +492,9 @@ export function HogFunctionScene(): JSX.Element {
             : {
                   label: 'Metrics',
                   key: 'metrics',
-                  content: <HogFunctionMetrics id={id} />,
+                  content: (
+                      <HogFunctionMetrics id={id} seriesColors={type === 'destination' ? METRIC_COLORS : undefined} />
+                  ),
               },
         type === 'site_app' || type === 'site_destination'
             ? null
