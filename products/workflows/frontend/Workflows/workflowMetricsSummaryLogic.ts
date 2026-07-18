@@ -91,7 +91,7 @@ export const WORKFLOW_SUMMARY_METRICS: Record<
         metricNames: ['triggered'],
     },
     persons_messaged: {
-        name: 'Emails sent',
+        name: 'Emails',
         description: 'Total number of emails attempted to be sent by this workflow',
         color: '#00F',
         metricNames: ['email_sent'],
@@ -899,14 +899,14 @@ export const workflowMetricsSummaryLogic = kea<workflowMetricsSummaryLogicType>(
         ],
 
         // Which messaging channels actually produced "sent" metrics in the fetched window. Drives the
-        // channel-aware "sent" summary tile + chart, so a push-only flow doesn't say "Emails sent".
+        // channel-aware "sent" summary tile + chart, so a push-only flow says "Push notifications".
         messagingChannels: [
             (s) => [s.appMetricsTrends],
             (appMetricsTrends: AppMetricsTimeSeriesResponse | null): { hasEmail: boolean; hasPush: boolean } =>
                 detectMessagingChannels(appMetricsTrends),
         ],
 
-        // "Emails sent" for email-only, "Push notifications sent" for push-only, "Messages sent" for both.
+        // "Emails" for email-only, "Push notifications" for push-only, "Messages" for both.
         sentSummaryLabel: [
             (s) => [s.messagingChannels],
             (messagingChannels: { hasEmail: boolean; hasPush: boolean }): string => channelSentLabel(messagingChannels),
@@ -1244,9 +1244,9 @@ export function detectMessagingChannels(appMetricsTrends: AppMetricsTimeSeriesRe
     }
 }
 
-// "Emails sent" for email-only, "Push notifications sent" for push-only, "Messages sent" for both.
+// "Emails" for email-only, "Push notifications" for push-only, "Messages" for both.
 export function channelSentLabel({ hasEmail, hasPush }: { hasEmail: boolean; hasPush: boolean }): string {
-    return hasEmail && hasPush ? 'Messages sent' : hasPush ? 'Push notifications sent' : 'Emails sent'
+    return hasEmail && hasPush ? 'Messages' : hasPush ? 'Push notifications' : 'Emails'
 }
 
 export function buildEmailMetricRows(
