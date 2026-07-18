@@ -2,7 +2,6 @@ import { MakeLogicType, afterMount, connect, kea, key, listeners, path, props, s
 import { loaders } from 'kea-loaders'
 import { combineUrl } from 'kea-router'
 
-import { getColorVar } from 'lib/colors'
 import {
     AppMetricsTimeSeriesResponse,
     AppMetricsTotalsRequest,
@@ -10,6 +9,7 @@ import {
     loadAppMetricsTotals,
     type AppMetricsTotalsResponse,
 } from 'lib/components/AppMetrics/appMetricsLogic'
+import { METRIC_COLORS } from 'lib/components/AppMetrics/metricColors'
 import { dayjs } from 'lib/dayjs'
 import { buildHogInvocationsSearchParams } from 'scenes/hog-functions/invocations/hogInvocationsLogic'
 import { urls } from 'scenes/urls'
@@ -81,33 +81,33 @@ export const WORKFLOW_SUMMARY_METRICS: Record<
     in_progress: {
         name: 'In progress',
         description: 'Total number of workflow runs currently in progress',
-        color: getColorVar('warning'),
+        color: METRIC_COLORS['In progress'],
         metricNames: ['in_progress'],
     },
     started: {
         name: 'Started',
         description: 'Total number of workflow runs started',
-        color: getColorVar('success'),
+        color: METRIC_COLORS['Started'],
         metricNames: ['triggered'],
     },
     persons_messaged: {
         name: 'Emails',
         description: 'Total number of emails attempted to be sent by this workflow',
-        color: '#00F',
+        color: METRIC_COLORS['Emails'],
         metricNames: ['email_sent'],
     },
     completed: {
         name: 'Completed',
         description:
             'Total number of workflow runs that finished — whether they reached the end of the workflow or exited early (for example, by meeting the conversion goal on an exit-on-conversion workflow). This may include runs that began before the selected date range but finished within it.',
-        color: getColorVar('success'),
+        color: METRIC_COLORS['Completed'],
         metricNames: ['succeeded'],
     },
     converted: {
         name: 'Converted',
         description:
             'Total number of conversions recorded for this workflow. A conversion is counted when a person matches the workflow’s conversion goal (property- or event-based), regardless of whether the workflow is set to exit on conversion.',
-        color: getColorVar('purple'),
+        color: METRIC_COLORS['Converted'],
         metricNames: ['conversion'],
     },
 }
@@ -119,58 +119,58 @@ export const WORKFLOW_EMAIL_METRICS: Record<
     email_sent: {
         name: 'Sent',
         description: 'Total number of emails sent to recipients',
-        color: getColorVar('primary'),
+        color: METRIC_COLORS['Sent'],
         metricNames: ['email_sent'],
     },
     email_delivered: {
         name: 'Delivered',
         description:
             "Total number of emails that were successfully delivered to the recipient's inbox. This is confirmed by the recipient's mail server accepting the email.",
-        color: getColorVar('success'),
+        color: METRIC_COLORS['Delivered'],
         metricNames: ['email_delivered'],
     },
     email_failed: {
         name: 'Failed',
         description:
             'Total number of emails that were not attempted to be sent. This typically indicates the PostHog email service determined the email contained a virus.',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Failed'],
         metricNames: ['email_failed'],
     },
     email_opened: {
         name: 'Opened',
         description: 'Total number of emails opened',
-        color: getColorVar('blue'),
+        color: METRIC_COLORS['Opened'],
         metricNames: ['email_opened'],
     },
     email_link_clicked: {
         name: 'Link clicked',
         description: 'Total number of times links in emails were clicked',
-        color: getColorVar('indigo'),
+        color: METRIC_COLORS['Link clicked'],
         metricNames: ['email_link_clicked'],
     },
     email_bounced: {
         name: 'Bounced',
         description: 'Total number of emails that bounced',
-        color: getColorVar('orange'),
+        color: METRIC_COLORS['Bounced'],
         metricNames: ['email_bounced'],
     },
     email_bounce_prevented: {
         name: 'Bounce prevented',
         description:
             'Total number of emails that were not sent because pre-send validation predicted a hard bounce: the address was malformed or its domain has no mail servers. These sends are skipped before they can hurt deliverability and are not billed.',
-        color: getColorVar('purple'),
+        color: METRIC_COLORS['Bounce prevented'],
         metricNames: ['email_bounce_prevented'],
     },
     email_blocked: {
         name: 'Blocked',
         description: 'Total number of emails that were blocked by the recipient server',
-        color: getColorVar('red'),
+        color: METRIC_COLORS['Blocked'],
         metricNames: ['email_blocked'],
     },
     email_spam: {
         name: 'Marked as spam',
         description: 'Total number of emails that were marked as spam by recipient server or recipient email client',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Marked as spam'],
         metricNames: ['email_spam'],
     },
 }
@@ -186,21 +186,21 @@ export const WORKFLOW_PUSH_METRICS: Record<
         name: 'Sent',
         description:
             'Total number of push notifications accepted by the provider (FCM or APNs) for delivery. The provider accepting a notification does not guarantee the device displayed it.',
-        color: getColorVar('primary'),
+        color: METRIC_COLORS['Sent'],
         metricNames: ['push_sent'],
     },
     push_skipped: {
         name: 'Skipped',
         description:
             'Total number of recipients skipped because they had no registered device token, or their token was reported dead by the provider (for example, the app was uninstalled) and removed.',
-        color: getColorVar('warning'),
+        color: METRIC_COLORS['Skipped'],
         metricNames: ['push_skipped'],
     },
     push_failed: {
         name: 'Failed',
         description:
             'Total number of push notifications that could not be sent — for example invalid credentials, a rejected payload, or a provider outage after retries.',
-        color: getColorVar('danger'),
+        color: METRIC_COLORS['Failed'],
         metricNames: ['push_failed'],
     },
 }

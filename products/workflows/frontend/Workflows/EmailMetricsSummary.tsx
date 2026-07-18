@@ -5,6 +5,7 @@ import { getColorVar } from 'lib/colors'
 import { appMetricsLogic } from 'lib/components/AppMetrics/appMetricsLogic'
 import { AppMetricsTrends } from 'lib/components/AppMetrics/AppMetricsTrends'
 import { AppMetricSummary } from 'lib/components/AppMetrics/AppMetricSummary'
+import { METRIC_COLORS } from 'lib/components/AppMetrics/metricColors'
 
 import { EMAIL_METRIC_INVOCATION_FILTERS, EmailMetric, WORKFLOW_EMAIL_METRICS } from './workflowMetricsSummaryLogic'
 
@@ -31,7 +32,6 @@ export function EmailMetricsSummary({
                               name:
                                   WORKFLOW_EMAIL_METRICS[series.name as keyof typeof WORKFLOW_EMAIL_METRICS]?.name ??
                                   series.name,
-                              color: WORKFLOW_EMAIL_METRICS[series.name as keyof typeof WORKFLOW_EMAIL_METRICS]?.color,
                           })),
                   }
                 : null,
@@ -60,7 +60,11 @@ export function EmailMetricsSummary({
                     )
                 })}
             </div>
-            <AppMetricsTrends appMetricsTrends={emailTrends} loading={appMetricsTrendsLoading} />
+            <AppMetricsTrends
+                appMetricsTrends={emailTrends}
+                loading={appMetricsTrendsLoading}
+                seriesColors={METRIC_COLORS}
+            />
         </>
     )
 }

@@ -6,11 +6,9 @@ import { LemonLabel, LemonTable, LemonTableColumns, LemonTag, Link, SpinnerOverl
 
 import { getColorVar } from 'lib/colors'
 import { type AppMetricsTimeSeriesResponse } from 'lib/components/AppMetrics/appMetricsLogic'
-import {
-    type AppMetricsSeriesOverride,
-    AppMetricsTimeSeriesChart,
-} from 'lib/components/AppMetrics/AppMetricsTimeSeriesChart'
+import { AppMetricsTrends } from 'lib/components/AppMetrics/AppMetricsTrends'
 import { AppMetricSummary } from 'lib/components/AppMetrics/AppMetricSummary'
+import { METRIC_COLORS } from 'lib/components/AppMetrics/metricColors'
 import { humanFriendlyNumber } from 'lib/utils/numbers'
 
 import {
@@ -22,22 +20,6 @@ import {
     workflowMetricsSummaryLogic,
     type WorkflowMetricsSummaryLogicProps,
 } from './workflowMetricsSummaryLogic'
-
-// One color per series name, shared by the summary tiles and the trends chart below them so a metric
-// reads the same in both places. Keyed by series name (not array position) so a channel keeps its
-// color whether or not the workflow also uses the other channel; email and push variants share one.
-const SUMMARY_SERIES_COLOR: Record<string, string> = {
-    Started: getColorVar('success'),
-    Emails: getColorVar('blue'),
-    Messages: getColorVar('blue'),
-    'Push notifications': getColorVar('purple'),
-    Completed: getColorVar('warning'),
-    Converted: getColorVar('danger'),
-}
-
-const SUMMARY_SERIES_COLOR_OVERRIDES: Record<string, AppMetricsSeriesOverride> = Object.fromEntries(
-    Object.entries(SUMMARY_SERIES_COLOR).map(([name, color]) => [name, { color }])
-)
 
 interface WorkflowMetricsSummaryProps extends WorkflowMetricsSummaryLogicProps {
     onSelectAction?: (actionId: string) => void
@@ -260,7 +242,7 @@ export function WorkflowMetricsSummary({
                             loading={loading}
                             timeSeries={timeSeries}
                             previousPeriodTimeSeries={previousPeriodTimeSeries}
-                            color={SUMMARY_SERIES_COLOR[name] ?? metric.color}
+                            color={METRIC_COLORS[name] ?? metric.color}
                             colorIfZero={getColorVar('muted')}
                             footer={
                                 summaryMetric === 'converted' &&
@@ -335,20 +317,7 @@ export function WorkflowMetricsSummary({
                 </div>
             ) : null}
 
-            <div className="relative border rounded min-h-[20rem] h-[70vh] bg-surface-primary">
-                {loading ? (
-                    <SpinnerOverlay />
-                ) : !workflowSummaryTrends ? (
-                    <div className="flex-1 flex items-center justify-center">Missing</div>
-                ) : (
-                    <AppMetricsTimeSeriesChart
-                        className="p-2"
-                        timeSeries={workflowSummaryTrends}
-                        seriesOverrides={SUMMARY_SERIES_COLOR_OVERRIDES}
-                        showLegend
-                    />
-                )}
-            </div>
+            <AppMetricsTrends appMetricsTrends={workflowSummaryTrends} loading={loading} seriesColors={METRIC_COLORS} />
         </>
     )
 }
