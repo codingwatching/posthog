@@ -12,6 +12,9 @@ export type AppMetricSummaryProps = {
     name: string
     description: string
     color?: string
+    /** Per-series colors keyed by series name, for tiles whose sparkline breaks down into named series
+     *  (e.g. a channel split). Takes precedence over `color` so the tile matches the full trends chart. */
+    seriesColors?: Record<string, string>
     colorIfZero?: string
     timeSeries: AppMetricsTimeSeriesResponse | null
     previousPeriodTimeSeries?: AppMetricsTimeSeriesResponse | null
@@ -31,6 +34,7 @@ export function AppMetricSummary({
     previousPeriodTimeSeries,
     description,
     color,
+    seriesColors,
     colorIfZero,
     loading,
     hideIfZero = false,
@@ -59,7 +63,19 @@ export function AppMetricSummary({
 
     const chartColor = total === 0 ? colorIfZero : color
     const seriesOverrides = useMemo(() => {
-        if (!timeSeries || !chartColor) {
+        if (!timeSeries) {
+            return undefined
+        }
+        // With per-series colors, color each named series so the tile matches the full trends chart —
+        // this is what keeps a channel-breakdown sparkline consistent with the big chart below it.
+        if (seriesColors && total !== 0) {
+            return Object.fromEntries(
+                timeSeries.series
+                    .filter((x) => seriesColors[x.name])
+                    .map((x): [string, AppMetricsSeriesOverride] => [x.name, { color: seriesColors[x.name] }])
+            )
+        }
+        if (!chartColor) {
             return undefined
         }
         // A single-series tile takes its metric's brand color. With more than one series (e.g. a
@@ -71,7 +87,7 @@ export function AppMetricSummary({
         return Object.fromEntries(
             timeSeries.series.map((x): [string, AppMetricsSeriesOverride] => [x.name, { color: chartColor }])
         )
-    }, [timeSeries, chartColor, total])
+    }, [timeSeries, chartColor, total, seriesColors])
 
     // Hide component if hideIfZero is true and there's no data
     if (hideIfZero && !loading && total === 0 && totalPreviousPeriod === 0) {
