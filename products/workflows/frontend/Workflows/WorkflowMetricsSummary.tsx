@@ -4,9 +4,13 @@ import { useCallback, useMemo } from 'react'
 import { IconArrowRight, IconLetter, IconNotification } from '@posthog/icons'
 import { LemonLabel, LemonTable, LemonTableColumns, LemonTag, Link, SpinnerOverlay } from '@posthog/lemon-ui'
 
+import { useChartTheme } from 'lib/charts/hooks'
 import { getColorVar } from 'lib/colors'
 import { type AppMetricsTimeSeriesResponse } from 'lib/components/AppMetrics/appMetricsLogic'
-import { AppMetricsTrends } from 'lib/components/AppMetrics/AppMetricsTrends'
+import {
+    type AppMetricsSeriesOverride,
+    AppMetricsTimeSeriesChart,
+} from 'lib/components/AppMetrics/AppMetricsTimeSeriesChart'
 import { AppMetricSummary } from 'lib/components/AppMetrics/AppMetricSummary'
 import { humanFriendlyNumber } from 'lib/utils/numbers'
 
@@ -19,6 +23,20 @@ import {
     workflowMetricsSummaryLogic,
     type WorkflowMetricsSummaryLogicProps,
 } from './workflowMetricsSummaryLogic'
+
+// Pin each summary-trend line to a fixed palette slot by series name, so a channel keeps the same
+// color whether or not the workflow also uses the other channel. Otherwise the chart colors series
+// by array position, and e.g. "Push notifications" shifts from green to purple when an email line
+// precedes it. Email variants share a slot, as do push variants.
+const SUMMARY_TREND_COLOR_INDEX: Record<string, number> = {
+    Started: 0,
+    Emails: 1,
+    'Emails sent': 1,
+    'Push notifications': 2,
+    'Push notifications sent': 2,
+    Completed: 3,
+    Converted: 4,
+}
 
 interface WorkflowMetricsSummaryProps extends WorkflowMetricsSummaryLogicProps {
     onSelectAction?: (actionId: string) => void
@@ -52,6 +70,18 @@ export function WorkflowMetricsSummary({
         messagingChannels,
         sentSummaryLabel,
     } = useValues(workflowMetricsSummaryLogic(props))
+
+    const theme = useChartTheme()
+    const summaryTrendColorOverrides = useMemo<Record<string, AppMetricsSeriesOverride>>(
+        () =>
+            Object.fromEntries(
+                Object.entries(SUMMARY_TREND_COLOR_INDEX).map(([name, index]) => [
+                    name,
+                    { color: theme.colors[index % theme.colors.length] },
+                ])
+            ),
+        [theme]
+    )
 
     // Email and push don't share a funnel, so each channel gets its own table with the columns that
     // actually apply — email keeps the delivery→open→click funnel, push surfaces skipped/failed as
@@ -316,7 +346,20 @@ export function WorkflowMetricsSummary({
                 </div>
             ) : null}
 
-            <AppMetricsTrends appMetricsTrends={workflowSummaryTrends} loading={loading} />
+            <div className="relative border rounded min-h-[20rem] h-[70vh] bg-surface-primary">
+                {loading ? (
+                    <SpinnerOverlay />
+                ) : !workflowSummaryTrends ? (
+                    <div className="flex-1 flex items-center justify-center">Missing</div>
+                ) : (
+                    <AppMetricsTimeSeriesChart
+                        className="p-2"
+                        timeSeries={workflowSummaryTrends}
+                        seriesOverrides={summaryTrendColorOverrides}
+                        showLegend
+                    />
+                )}
+            </div>
         </>
     )
 }
