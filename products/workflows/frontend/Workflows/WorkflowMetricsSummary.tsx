@@ -41,7 +41,9 @@ export function WorkflowMetricsSummary({
         inProgressTotalLoading,
         workflowSummaryTrends,
         emailMetricsRows,
+        emailTotalsByActionIdLoading,
         pushMetricsRows,
+        pushTotalsByActionIdLoading,
         conversionRate,
         conversionStats,
         conversionStatsLoading,
@@ -287,7 +289,13 @@ export function WorkflowMetricsSummary({
                         </span>
                         Email steps
                     </LemonLabel>
-                    <LemonTable columns={emailColumns} dataSource={emailMetricsRows} rowKey="id" size="small" />
+                    <LemonTable
+                        columns={emailColumns}
+                        dataSource={emailMetricsRows}
+                        loading={emailTotalsByActionIdLoading}
+                        rowKey="id"
+                        size="small"
+                    />
                 </div>
             ) : null}
             {pushMetricsRows.length > 0 ? (
@@ -298,7 +306,13 @@ export function WorkflowMetricsSummary({
                         </span>
                         Push steps
                     </LemonLabel>
-                    <LemonTable columns={pushColumns} dataSource={pushMetricsRows} rowKey="id" size="small" />
+                    <LemonTable
+                        columns={pushColumns}
+                        dataSource={pushMetricsRows}
+                        loading={pushTotalsByActionIdLoading}
+                        rowKey="id"
+                        size="small"
+                    />
                 </div>
             ) : null}
 
