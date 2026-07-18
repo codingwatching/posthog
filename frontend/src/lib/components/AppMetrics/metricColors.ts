@@ -6,15 +6,17 @@ import { getColorVar } from 'lib/colors'
 // so tiles and charts never drift apart.
 //
 // Only `success`/`blue`/`purple`/`warning`/`danger` exist as themed color vars; the rest (`orange`,
-// `indigo`, `red`, `primary`) resolve to white in dark mode. The whole-workflow summary has five
-// series, so it uses those five. The email and push funnels have more series than there are distinct
-// semantic colors, so they use the data-visualization palette (`data-color-*`), which is built for it.
+// `indigo`, `red`, `primary`) resolve to white in dark mode. The whole-workflow summary mostly uses
+// those themed colors, but Push notifications takes a neutral data-visualization color instead of
+// `danger` so a normal channel does not read as an error. The email and push funnels have more series
+// than there are distinct semantic colors, so they use the data-visualization palette (`data-color-*`),
+// which is built for it.
 export const METRIC_COLORS: Record<string, string> = {
     // Whole-workflow summary
     'In progress': getColorVar('warning'),
     Started: getColorVar('success'),
     Emails: getColorVar('blue'),
-    'Push notifications': getColorVar('danger'),
+    'Push notifications': getColorVar('data-color-3'),
     Messages: getColorVar('blue'),
     Completed: getColorVar('warning'),
     Converted: getColorVar('purple'),
