@@ -902,17 +902,14 @@ export const workflowMetricsSummaryLogic = kea<workflowMetricsSummaryLogicType>(
         // channel-aware "sent" summary tile + chart, so a push-only flow doesn't say "Emails sent".
         messagingChannels: [
             (s) => [s.appMetricsTrends],
-            (appMetricsTrends: AppMetricsTimeSeriesResponse | null): { hasEmail: boolean; hasPush: boolean } => ({
-                hasEmail: !!appMetricsTrends?.series.some((x: { name: string }) => x.name === 'email_sent'),
-                hasPush: !!appMetricsTrends?.series.some((x: { name: string }) => x.name === 'push_sent'),
-            }),
+            (appMetricsTrends: AppMetricsTimeSeriesResponse | null): { hasEmail: boolean; hasPush: boolean } =>
+                detectMessagingChannels(appMetricsTrends),
         ],
 
         // "Emails sent" for email-only, "Push notifications sent" for push-only, "Messages sent" for both.
         sentSummaryLabel: [
             (s) => [s.messagingChannels],
-            ({ hasEmail, hasPush }): string =>
-                hasEmail && hasPush ? 'Messages sent' : hasPush ? 'Push notifications sent' : 'Emails sent',
+            (messagingChannels: { hasEmail: boolean; hasPush: boolean }): string => channelSentLabel(messagingChannels),
         ],
 
         metricNameBySummaryMetric: [
@@ -1105,25 +1102,7 @@ export const workflowMetricsSummaryLogic = kea<workflowMetricsSummaryLogicType>(
                     updated_at?: number | undefined
                 } & Record<string, unknown>)[],
                 emailTotalsByActionId: Record<string, Partial<Record<EmailMetric, number>>>
-            ): EmailMetricRow[] =>
-                emailActions.map((action: { id: string; name: string }) => {
-                    const totals = emailTotalsByActionId[action.id] || {}
-                    const sent = totals.email_sent ?? 0
-                    const bounced = totals.email_bounced ?? 0
-                    const blocked = totals.email_blocked ?? 0
-                    return {
-                        id: action.id,
-                        email: action.name,
-                        // Fallback to calculating delivered as sent - bounced - blocked if email_delivered metric is not available, since we were not always collecting this metric
-                        delivered: totals.email_delivered ?? Math.max(0, sent - bounced - blocked),
-                        sent: totals.email_sent ?? 0,
-                        opened: totals.email_opened ?? 0,
-                        linkClicked: totals.email_link_clicked ?? 0,
-                        bounced,
-                        bouncePrevented: totals.email_bounce_prevented ?? 0,
-                        blocked,
-                    }
-                }),
+            ): EmailMetricRow[] => buildEmailMetricRows(emailActions, emailTotalsByActionId),
         ],
 
         pushMetricsRows: [
@@ -1178,17 +1157,7 @@ export const workflowMetricsSummaryLogic = kea<workflowMetricsSummaryLogicType>(
                     updated_at?: number | undefined
                 } & Record<string, unknown>)[],
                 pushTotalsByActionId: Record<string, Partial<Record<PushMetric, number>>>
-            ): PushMetricRow[] =>
-                pushActions.map((action: { id: string; name: string }) => {
-                    const totals = pushTotalsByActionId[action.id] || {}
-                    return {
-                        id: action.id,
-                        push: action.name,
-                        sent: totals.push_sent ?? 0,
-                        skipped: totals.push_skipped ?? 0,
-                        failed: totals.push_failed ?? 0,
-                    }
-                }),
+            ): PushMetricRow[] => buildPushMetricRows(pushActions, pushTotalsByActionId),
         ],
     }),
 
@@ -1262,6 +1231,62 @@ export function subtractSeries(
             },
         ],
     }
+}
+
+// Which messaging channels produced "sent" metrics in the fetched window, keyed off the trend series.
+export function detectMessagingChannels(appMetricsTrends: AppMetricsTimeSeriesResponse | null): {
+    hasEmail: boolean
+    hasPush: boolean
+} {
+    return {
+        hasEmail: !!appMetricsTrends?.series.some((x: { name: string }) => x.name === 'email_sent'),
+        hasPush: !!appMetricsTrends?.series.some((x: { name: string }) => x.name === 'push_sent'),
+    }
+}
+
+// "Emails sent" for email-only, "Push notifications sent" for push-only, "Messages sent" for both.
+export function channelSentLabel({ hasEmail, hasPush }: { hasEmail: boolean; hasPush: boolean }): string {
+    return hasEmail && hasPush ? 'Messages sent' : hasPush ? 'Push notifications sent' : 'Emails sent'
+}
+
+export function buildEmailMetricRows(
+    emailActions: { id: string; name: string }[],
+    emailTotalsByActionId: Record<string, Partial<Record<EmailMetric, number>>>
+): EmailMetricRow[] {
+    return emailActions.map((action) => {
+        const totals = emailTotalsByActionId[action.id] || {}
+        const sent = totals.email_sent ?? 0
+        const bounced = totals.email_bounced ?? 0
+        const blocked = totals.email_blocked ?? 0
+        return {
+            id: action.id,
+            email: action.name,
+            // Fallback to calculating delivered as sent - bounced - blocked if email_delivered metric is not available, since we were not always collecting this metric
+            delivered: totals.email_delivered ?? Math.max(0, sent - bounced - blocked),
+            sent,
+            opened: totals.email_opened ?? 0,
+            linkClicked: totals.email_link_clicked ?? 0,
+            bounced,
+            bouncePrevented: totals.email_bounce_prevented ?? 0,
+            blocked,
+        }
+    })
+}
+
+export function buildPushMetricRows(
+    pushActions: { id: string; name: string }[],
+    pushTotalsByActionId: Record<string, Partial<Record<PushMetric, number>>>
+): PushMetricRow[] {
+    return pushActions.map((action) => {
+        const totals = pushTotalsByActionId[action.id] || {}
+        return {
+            id: action.id,
+            push: action.name,
+            sent: totals.push_sent ?? 0,
+            skipped: totals.push_skipped ?? 0,
+            failed: totals.push_failed ?? 0,
+        }
+    })
 }
 
 function mapEmailMetricsToActions(
