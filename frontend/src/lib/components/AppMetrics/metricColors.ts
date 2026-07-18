@@ -9,10 +9,12 @@ export const METRIC_COLORS: Record<string, string> = {
     'In progress': getColorVar('warning'),
     Started: getColorVar('success'),
     Emails: getColorVar('blue'),
-    'Push notifications': getColorVar('purple'),
+    'Push notifications': getColorVar('orange'),
     Messages: getColorVar('blue'),
+    // Completed keeps the trends chart legible: the tiles color both Started and Completed green, and
+    // two green lines in one chart are indistinguishable, so Completed takes its own color here.
     Completed: getColorVar('warning'),
-    Converted: getColorVar('danger'),
+    Converted: getColorVar('purple'),
     // Email step
     Sent: getColorVar('primary'),
     Delivered: getColorVar('success'),
