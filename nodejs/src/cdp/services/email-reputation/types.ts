@@ -1,11 +1,13 @@
 import { ReputationState } from './classifier'
 
-/** Per-source email metrics aggregated from app_metrics2 over the evaluation window.
+/** One hourly bucket of email metrics from app_metrics2 (timestamps there are hour-truncated).
  * `appSourceId` is usually a HogFlow id but can be a batch-job id; rows that don't match a
  * HogFlow still count toward the team aggregate. */
-export interface EmailMetricsRow {
+export interface HourlyEmailMetricsRow {
     teamId: number
     appSourceId: string
+    /** ISO datetime of the hour bucket. */
+    hourBucket: string
     sent: number
     bounced: number
     complained: number

@@ -10,9 +10,11 @@ import { Hub } from '~/types'
 
 import { DEFAULT_THRESHOLDS } from './classifier'
 import { EmailReputationService } from './email-reputation.service'
-import { EmailMetricsRow } from './types'
+import { HourlyEmailMetricsRow } from './types'
 
 const EVALUATED_AT = '2026-07-10T06:00:00.000Z'
+const HOURS_AGO = (hours: number): string =>
+    new Date(new Date(EVALUATED_AT).getTime() - hours * 3600 * 1000).toISOString()
 
 describe('EmailReputationService', () => {
     jest.setTimeout(5000)
@@ -55,13 +57,14 @@ describe('EmailReputationService', () => {
         return batchJobId
     }
 
-    const mockMetrics = (rows: EmailMetricsRow[]): void => {
+    const mockMetrics = (rows: HourlyEmailMetricsRow[]): void => {
         mockClickhouse.query.mockResolvedValue({
             json: () =>
                 Promise.resolve(
                     rows.map((row) => ({
                         team_id: row.teamId,
                         app_source_id: row.appSourceId,
+                        hour_bucket: row.hourBucket,
                         sent: row.sent,
                         bounced: row.bounced,
                         complained: row.complained,
@@ -73,7 +76,7 @@ describe('EmailReputationService', () => {
     const getSnapshots = async (): Promise<any[]> => {
         const result = await hub.postgres.query(
             PostgresUse.COMMON_READ,
-            `SELECT * FROM posthog_emailreputationsnapshot WHERE team_id = $1 ORDER BY scope, hog_flow_id`,
+            `SELECT * FROM posthog_emailreputationsnapshot WHERE team_id = $1 ORDER BY scope, hog_flow_id, evaluated_at`,
             [teamId],
             'testGetSnapshots'
         )
@@ -87,7 +90,8 @@ describe('EmailReputationService', () => {
         teamId = await createTeam(hub.postgres, team!.organization_id)
         mockClickhouse = { query: jest.fn() }
         service = new EmailReputationService(mockClickhouse as any, hub.postgres, {
-            windowHours: 24,
+            targetVolume: 1000,
+            lookbackDays: 30,
             thresholds: DEFAULT_THRESHOLDS,
         })
     })
@@ -98,7 +102,9 @@ describe('EmailReputationService', () => {
 
     it('writes workflow and team snapshots, and a retried batch adds no duplicate rows', async () => {
         const flow = await insertEmailFlow()
-        mockMetrics([{ teamId, appSourceId: flow.id, sent: 1000, bounced: 60, complained: 0 }])
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(2), sent: 1000, bounced: 60, complained: 0 },
+        ])
 
         const summary = await service.evaluateTeamBatch([teamId], EVALUATED_AT)
         expect(summary).toMatchObject({ teamsEvaluated: 1, workflowsEvaluated: 1, snapshotsWritten: 2 })
@@ -120,14 +126,58 @@ describe('EmailReputationService', () => {
         expect(await getSnapshots()).toHaveLength(4)
     })
 
+    it('computes rates over the most recent target volume, keeping an old batch until newer sends displace it', async () => {
+        const flow = await insertEmailFlow()
+        // A 5%-bounce batch 6 days ago and only 400 newer clean sends: the window (target 1000)
+        // still reaches back to the batch, so it keeps counting — no fixed-24h cliff.
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(144), sent: 1000, bounced: 50, complained: 0 },
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(2), sent: 400, bounced: 0, complained: 0 },
+        ])
+        await service.evaluateTeamBatch([teamId], EVALUATED_AT)
+
+        let workflowRow = (await getSnapshots()).find((r) => r.hog_flow_id === flow.id)
+        // 1400 sent / 50 bounced ≈ 3.6% → warning (diluted below the 5% critical line but still counted)
+        expect(workflowRow).toMatchObject({ state: 'warning', emails_sent: '1400' })
+        expect(workflowRow.bounce_rate).toBeCloseTo(50 / 1400)
+
+        // Once newer volume alone reaches the target, the old batch falls out of the window
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(144), sent: 1000, bounced: 50, complained: 0 },
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(2), sent: 1000, bounced: 5, complained: 0 },
+        ])
+        await service.evaluateTeamBatch([teamId], '2026-07-11T06:00:00.000Z')
+
+        const laterRows = await getSnapshots()
+        workflowRow = laterRows.filter((r) => r.hog_flow_id === flow.id).at(-1)
+        expect(workflowRow).toMatchObject({ state: 'healthy', emails_sent: '1000' })
+        expect(workflowRow.bounce_rate).toBeCloseTo(0.005)
+    })
+
+    it('counts late-arriving bounces from bounce-only buckets newer than the sends', async () => {
+        const flow = await insertEmailFlow()
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(10), sent: 1000, bounced: 10, complained: 0 },
+            // Bounces that arrived hours after the send, in a bucket with zero sends
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(3), sent: 0, bounced: 45, complained: 0 },
+        ])
+
+        await service.evaluateTeamBatch([teamId], EVALUATED_AT)
+
+        const workflowRow = (await getSnapshots()).find((r) => r.hog_flow_id === flow.id)
+        // 55/1000 = 5.5% → critical; dropping the bounce-only bucket would misreport 1% healthy
+        expect(workflowRow).toMatchObject({ state: 'critical' })
+        expect(workflowRow.bounce_rate).toBeCloseTo(0.055)
+    })
+
     it('folds batch-job metrics into the parent workflow and counts orphans only at team level', async () => {
         const flow = await insertEmailFlow()
         const batchJobId = await insertBatchJob(flow.id)
         mockMetrics([
-            { teamId, appSourceId: flow.id, sent: 400, bounced: 4, complained: 0 },
-            { teamId, appSourceId: batchJobId, sent: 600, bounced: 20, complained: 0 },
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(4), sent: 400, bounced: 4, complained: 0 },
+            { teamId, appSourceId: batchJobId, hourBucket: HOURS_AGO(3), sent: 600, bounced: 20, complained: 0 },
             // Matches neither a flow nor a batch job (e.g. deleted flow): team aggregate only
-            { teamId, appSourceId: randomUUID(), sent: 100, bounced: 100, complained: 0 },
+            { teamId, appSourceId: randomUUID(), hourBucket: HOURS_AGO(2), sent: 100, bounced: 100, complained: 0 },
         ])
 
         await service.evaluateTeamBatch([teamId], EVALUATED_AT)
@@ -141,5 +191,23 @@ describe('EmailReputationService', () => {
         const teamRow = rows.find((r) => r.hog_flow_id === null)
         // Orphan row included: 1100 sent, 124 bounced ≈ 11.3% → critical
         expect(teamRow).toMatchObject({ state: 'critical', emails_sent: '1100' })
+    })
+
+    it('writes a carry-forward team snapshot when a recently evaluated team goes silent', async () => {
+        const flow = await insertEmailFlow()
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(2), sent: 1000, bounced: 60, complained: 0 },
+        ])
+        await service.evaluateTeamBatch([teamId], EVALUATED_AT)
+
+        // Next run: no sends at all — the team still enters the plan via its recent snapshot...
+        mockMetrics([])
+        const nextRun = '2026-07-11T06:00:00.000Z'
+        expect(await service.fetchTeamsToEvaluate(nextRun)).toContain(teamId)
+
+        // ...and gets an explicit zero-volume row instead of yesterday's critical staying "current"
+        await service.evaluateTeamBatch([teamId], nextRun)
+        const teamRows = (await getSnapshots()).filter((r) => r.hog_flow_id === null)
+        expect(teamRows.at(-1)).toMatchObject({ state: 'insufficient_data', emails_sent: '0' })
     })
 })

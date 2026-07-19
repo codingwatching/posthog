@@ -18142,13 +18142,13 @@ export namespace Schemas {
        * * `warning` - Warning
        * * `critical` - Critical */
       readonly state: EmailReputationStateEnum;
-      /** Bounces / emails sent in the evaluated window (0-1). */
+      /** Bounces / emails sent over the evaluated volume (0-1). */
       readonly bounce_rate: number;
-      /** Spam complaints / emails sent in the evaluated window (0-1). */
+      /** Spam complaints / emails sent over the evaluated volume (0-1). */
       readonly complaint_rate: number;
-      /** Emails sent in the evaluated window (sample size). */
+      /** Emails in the evaluated volume: the target's most recent sends up to the configured representative volume (SES-style), not a fixed time window. 0 means no recent sending. */
       readonly emails_sent: number;
-      /** End of the evaluated rolling window; one snapshot exists per target per run. */
+      /** When this snapshot was computed; one snapshot exists per target per run. */
       readonly evaluated_at: string;
     }
 
@@ -52470,13 +52470,13 @@ export namespace Schemas {
        * * `warning` - Warning
        * * `critical` - Critical */
       readonly state: EmailReputationStateEnum;
-      /** Bounces / emails sent in the evaluated window (0-1). */
+      /** Bounces / emails sent over the evaluated volume (0-1). */
       readonly bounce_rate: number;
-      /** Spam complaints / emails sent in the evaluated window (0-1). */
+      /** Spam complaints / emails sent over the evaluated volume (0-1). */
       readonly complaint_rate: number;
-      /** Emails sent in the evaluated window (sample size). */
+      /** Emails in the evaluated volume: the target's most recent sends up to the configured representative volume (SES-style), not a fixed time window. 0 means no recent sending. */
       readonly emails_sent: number;
-      /** End of the evaluated rolling window; one snapshot exists per target per run. */
+      /** When this snapshot was computed; one snapshot exists per target per run. */
       readonly evaluated_at: string;
       /** The workflow this snapshot is for. */
       readonly hog_flow_id: string;

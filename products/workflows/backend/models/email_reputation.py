@@ -9,6 +9,10 @@ class EmailReputationSnapshot(TeamScopedRootMixin, UUIDModel):
     Append-only daily snapshots of per-workflow and per-tenant email deliverability reputation
     (bounce/complaint rates from app_metrics2), written by the Node Temporal evaluator via raw SQL.
 
+    Rates are volume-based, mirroring AWS SES: each snapshot covers the target's most recent sends
+    up to a configured representative volume, not a fixed time window — ``emails_sent`` is that
+    evaluated volume (0 for a carry-forward row written when a recently active team goes silent).
+
     One row per workflow (``hog_flow`` set, ``scope=WORKFLOW``) plus one aggregate row per team
     (``hog_flow`` null, ``scope=TEAM``) per evaluation run, so the table doubles as a time series
     for trend dashboards. Calculation only — enforcement (pausing bad senders) ships separately.

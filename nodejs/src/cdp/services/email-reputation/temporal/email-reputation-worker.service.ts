@@ -82,7 +82,8 @@ export class EmailReputationWorkerService {
             database: this.config.CLICKHOUSE_DATABASE,
         })
         return new EmailReputationService(clickhouse, this.deps.postgres, {
-            windowHours: this.config.EMAIL_REPUTATION_WINDOW_HOURS,
+            targetVolume: this.config.EMAIL_REPUTATION_TARGET_VOLUME,
+            lookbackDays: this.config.EMAIL_REPUTATION_LOOKBACK_DAYS,
             thresholds: {
                 minSends: this.config.EMAIL_REPUTATION_MIN_SENDS,
                 bounceWarning: this.config.EMAIL_REPUTATION_BOUNCE_WARNING_RATE,

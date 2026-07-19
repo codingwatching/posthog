@@ -1,13 +1,16 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from posthog.test.base import APIBaseTest
+
+from django.utils import timezone
 
 from rest_framework import status
 
 from products.workflows.backend.models import EmailReputationSnapshot, HogFlow
 
-RUN_1 = datetime(2026, 7, 8, 6, 0, tzinfo=UTC)
-RUN_2 = RUN_1 + timedelta(days=1)
+RUN_2 = timezone.now().replace(microsecond=0) - timedelta(days=1)
+RUN_1 = RUN_2 - timedelta(days=1)
+STALE_RUN = RUN_2 - timedelta(days=30)
 
 
 class TestEmailReputationAPI(APIBaseTest):
@@ -41,6 +44,7 @@ class TestEmailReputationAPI(APIBaseTest):
     def test_reputation_endpoint_returns_latest_history_and_worst_first_workflows(self):
         ok_flow = self._create_flow("Fine workflow")
         bad_flow = self._create_flow("Toxic workflow")
+        stale_flow = self._create_flow("Long-dead workflow")
 
         # Two daily team runs: latest must win regardless of insertion order
         self._create_snapshot(None, RUN_2, state="warning", bounce_rate=0.03)
@@ -50,6 +54,8 @@ class TestEmailReputationAPI(APIBaseTest):
         self._create_snapshot(ok_flow, RUN_1, state="critical", bounce_rate=0.09)
         self._create_snapshot(ok_flow, RUN_2, state="healthy", bounce_rate=0.005)
         self._create_snapshot(bad_flow, RUN_2, state="critical", bounce_rate=0.08)
+        # A workflow whose last snapshot predates the recency cutoff drops off the breakdown
+        self._create_snapshot(stale_flow, STALE_RUN, state="critical", bounce_rate=0.5)
 
         response = self.client.get(f"/api/projects/{self.team.id}/hog_flows/reputation")
         assert response.status_code == status.HTTP_200_OK

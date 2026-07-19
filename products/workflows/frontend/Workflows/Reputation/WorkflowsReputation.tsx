@@ -70,7 +70,7 @@ function TeamReputationCard({
                     <div className="text-lg font-semibold">{formatRate(reputation.complaint_rate)}</div>
                 </div>
                 <div>
-                    <div className="text-secondary text-xs">Emails sent (24h window)</div>
+                    <div className="text-secondary text-xs">Emails evaluated (recent volume)</div>
                     <div className="text-lg font-semibold">{humanFriendlyNumber(reputation.emails_sent)}</div>
                 </div>
                 <div>

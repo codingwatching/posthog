@@ -681,8 +681,8 @@ export const getHogFlowsReputationRetrieveUrl = (projectId: string) => {
 
 /**
  * Email deliverability reputation for this project: the latest project-wide snapshot, recent
- * project-wide history for trend display, and the latest snapshot per workflow (worst first).
- * Written daily by the Node evaluator; everything is null/empty until the first run.
+ * project-wide history for trend display, and the latest recent snapshot per workflow (worst
+ * first). Written daily by the Node evaluator; everything is null/empty until the first run.
  */
 export const hogFlowsReputationRetrieve = async (
     projectId: string,
