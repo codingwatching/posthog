@@ -1780,6 +1780,7 @@ export const sourceCatalogLogic = kea<sourceCatalogLogicType>([
                           | 'Skyvern'
                           | 'Slack'
                           | 'Slash'
+                          | 'Sleekplan'
                           | 'Smaily'
                           | 'SmartEngage'
                           | 'Smartreach'
