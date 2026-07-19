@@ -2041,6 +2041,7 @@ class ExternalDataSourceType(StrEnum):
     SHOPWARE = "Shopware"
     DUBSADO = "Dubsado"
     CAMPFIRE = "Campfire"
+    SLEEKPLAN = "Sleekplan"
 
 
 class ExternalQueryErrorCode(StrEnum):

@@ -1239,6 +1239,7 @@ export interface sourceWizardLogicActions {
             | 'Skyvern'
             | 'Slack'
             | 'Slash'
+            | 'Sleekplan'
             | 'Smaily'
             | 'SmartEngage'
             | 'Smartreach'

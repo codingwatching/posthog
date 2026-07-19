@@ -2092,6 +2092,7 @@ export interface CredentialApi {
  * * `Dubsado` - Dubsado
  * * `Campfire` - Campfire
  * * `PromptWatch` - PromptWatch
+ * * `Sleekplan` - Sleekplan
  */
 export type ExternalDataSourceTypeEnumApi =
     (typeof ExternalDataSourceTypeEnumApi)[keyof typeof ExternalDataSourceTypeEnumApi]
@@ -2955,6 +2956,7 @@ export const ExternalDataSourceTypeEnumApi = {
     Dubsado: 'Dubsado',
     Campfire: 'Campfire',
     PromptWatch: 'PromptWatch',
+    Sleekplan: 'Sleekplan',
 } as const
 
 export interface SimpleExternalDataSourceSerializersApi {

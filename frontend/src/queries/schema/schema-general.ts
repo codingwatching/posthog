@@ -7699,6 +7699,7 @@ export const externalDataSources = [
     'Shopware',
     'Dubsado',
     'Campfire',
+    'Sleekplan',
 ] as const
 
 export type ExternalDataSourceType = (typeof externalDataSources)[number]

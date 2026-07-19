@@ -924,6 +924,7 @@ doesn't conflict with concurrent PRs.
 - singular
 - skyvern
 - slash
+- sleekplan
 - smaily
 - smartengage
 - smartwaiver

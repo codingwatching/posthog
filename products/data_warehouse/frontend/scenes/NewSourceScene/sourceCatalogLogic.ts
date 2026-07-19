@@ -830,6 +830,7 @@ export interface sourceCatalogLogicMeta {
                       | 'Skyvern'
                       | 'Slack'
                       | 'Slash'
+                      | 'Sleekplan'
                       | 'Smaily'
                       | 'SmartEngage'
                       | 'Smartreach'
