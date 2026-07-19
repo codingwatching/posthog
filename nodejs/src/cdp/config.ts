@@ -157,6 +157,7 @@ export type CdpConfig = ClickhouseConfig & {
     // Email reputation evaluator (daily Temporal-scheduled bounce/complaint snapshots for workflows email)
     EMAIL_REPUTATION_EVALUATION_HOUR_UTC: number
     EMAIL_REPUTATION_TARGET_VOLUME: number
+    EMAIL_REPUTATION_MIN_WINDOW_HOURS: number
     EMAIL_REPUTATION_LOOKBACK_DAYS: number
     EMAIL_REPUTATION_MIN_SENDS: number
     EMAIL_REPUTATION_BOUNCE_WARNING_RATE: number
@@ -303,11 +304,12 @@ export function getDefaultCdpConfig(): CdpConfig {
         CYCLOTRON_NODE_JANITOR_CLEANUP_GRACE_MS: 10000,
 
         // Thresholds sit ahead of AWS SES's review lines (5% bounce / 0.1% complaint at ~0.5%
-        // escalation). Rates are computed SES-style over the most recent TARGET_VOLUME sends
-        // (scanning back at most LOOKBACK_DAYS), not a fixed time window. Calculation only for
-        // now — enforcement ships separately.
+        // escalation). Rates are computed SES-style over a window spanning at least
+        // MIN_WINDOW_HOURS and at least TARGET_VOLUME sends — whichever reaches further back
+        // (capped at LOOKBACK_DAYS). Calculation only for now — enforcement ships separately.
         EMAIL_REPUTATION_EVALUATION_HOUR_UTC: 6,
         EMAIL_REPUTATION_TARGET_VOLUME: 1000,
+        EMAIL_REPUTATION_MIN_WINDOW_HOURS: 24,
         EMAIL_REPUTATION_LOOKBACK_DAYS: 30,
         EMAIL_REPUTATION_MIN_SENDS: 100,
         EMAIL_REPUTATION_BOUNCE_WARNING_RATE: 0.02,

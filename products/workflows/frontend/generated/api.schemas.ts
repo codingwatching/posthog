@@ -877,7 +877,7 @@ export interface EmailReputationSnapshotApi {
     readonly bounce_rate: number
     /** Spam complaints / emails sent over the evaluated volume (0-1). */
     readonly complaint_rate: number
-    /** Emails in the evaluated volume: the target's most recent sends up to the configured representative volume (SES-style), not a fixed time window. 0 means no recent sending. */
+    /** Emails in the evaluated window: at least the target's last day of sends and at least the configured representative volume (SES-style), whichever covers more. 0 means no recent sending. */
     readonly emails_sent: number
     /** When this snapshot was computed; one snapshot exists per target per run. */
     readonly evaluated_at: string
@@ -903,7 +903,7 @@ export interface WorkflowEmailReputationSnapshotApi {
     readonly bounce_rate: number
     /** Spam complaints / emails sent over the evaluated volume (0-1). */
     readonly complaint_rate: number
-    /** Emails in the evaluated volume: the target's most recent sends up to the configured representative volume (SES-style), not a fixed time window. 0 means no recent sending. */
+    /** Emails in the evaluated window: at least the target's last day of sends and at least the configured representative volume (SES-style), whichever covers more. 0 means no recent sending. */
     readonly emails_sent: number
     /** When this snapshot was computed; one snapshot exists per target per run. */
     readonly evaluated_at: string

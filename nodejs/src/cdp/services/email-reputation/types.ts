@@ -6,8 +6,8 @@ import { ReputationState } from './classifier'
 export interface HourlyEmailMetricsRow {
     teamId: number
     appSourceId: string
-    /** ISO datetime of the hour bucket. */
-    hourBucket: string
+    /** Epoch seconds of the hour bucket (avoids timezone-ambiguous datetime strings). */
+    hourBucket: number
     sent: number
     bounced: number
     complained: number

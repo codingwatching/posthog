@@ -13,8 +13,7 @@ import { EmailReputationService } from './email-reputation.service'
 import { HourlyEmailMetricsRow } from './types'
 
 const EVALUATED_AT = '2026-07-10T06:00:00.000Z'
-const HOURS_AGO = (hours: number): string =>
-    new Date(new Date(EVALUATED_AT).getTime() - hours * 3600 * 1000).toISOString()
+const HOURS_AGO = (hours: number): number => Math.floor(Date.parse(EVALUATED_AT) / 1000) - hours * 3600
 
 describe('EmailReputationService', () => {
     jest.setTimeout(5000)
@@ -91,6 +90,7 @@ describe('EmailReputationService', () => {
         mockClickhouse = { query: jest.fn() }
         service = new EmailReputationService(mockClickhouse as any, hub.postgres, {
             targetVolume: 1000,
+            minWindowHours: 24,
             lookbackDays: 30,
             thresholds: DEFAULT_THRESHOLDS,
         })
@@ -152,6 +152,24 @@ describe('EmailReputationService', () => {
         workflowRow = laterRows.filter((r) => r.hog_flow_id === flow.id).at(-1)
         expect(workflowRow).toMatchObject({ state: 'healthy', emails_sent: '1000' })
         expect(workflowRow.bounce_rate).toBeCloseTo(0.005)
+    })
+
+    it('judges a high-volume sender on at least the minimum window, not just the newest buckets', async () => {
+        const flow = await insertEmailFlow()
+        // The newest bucket alone exceeds the 1000-send target and is clean; the bad blast 20h
+        // earlier is inside the 24h floor and must still count — stopping at the volume target
+        // would report this sender healthy while the shared account absorbed 10% bounces.
+        mockMetrics([
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(2), sent: 5000, bounced: 0, complained: 0 },
+            { teamId, appSourceId: flow.id, hourBucket: HOURS_AGO(20), sent: 5000, bounced: 500, complained: 0 },
+        ])
+
+        await service.evaluateTeamBatch([teamId], EVALUATED_AT)
+
+        const workflowRow = (await getSnapshots()).find((r) => r.hog_flow_id === flow.id)
+        // 10000 sent / 500 bounced = 5% → critical
+        expect(workflowRow).toMatchObject({ state: 'critical', emails_sent: '10000' })
+        expect(workflowRow.bounce_rate).toBeCloseTo(0.05)
     })
 
     it('counts late-arriving bounces from bounce-only buckets newer than the sends', async () => {

@@ -20,9 +20,12 @@ interface HogFlowRow {
 }
 
 export interface EmailReputationServiceConfig {
-    /** Rates are computed over the most recent this-many sends per target (SES-style
-     * "representative volume"), not a fixed time window. */
+    /** Each target's window must contain at least this many sends (SES-style
+     * "representative volume") — small senders' windows stretch back until it's met. */
     targetVolume: number
+    /** ...and must span at least this many hours — so a high-volume sender is judged on at
+     * least a full day of mail, not just the newest buckets that happen to reach the volume. */
+    minWindowHours: number
     /** How far back to scan for that volume. Bounded by app_metrics2's 90-day TTL. */
     lookbackDays: number
     thresholds: ReputationThresholds
@@ -30,6 +33,7 @@ export interface EmailReputationServiceConfig {
 
 export const DEFAULT_EMAIL_REPUTATION_CONFIG: EmailReputationServiceConfig = {
     targetVolume: 1000,
+    minWindowHours: 24,
     lookbackDays: 30,
     thresholds: DEFAULT_THRESHOLDS,
 }
@@ -50,11 +54,12 @@ interface SnapshotRow {
  * posthog_emailreputationsnapshot, so the table doubles as a time series for trend dashboards.
  *
  * Rates are volume-based, mirroring how AWS SES judges the shared sending account: each target's
- * bounce/complaint rate covers its most recent `targetVolume` sends (walking hourly buckets
- * backwards from the evaluation time, capped at `lookbackDays`), so a weekly batch blast keeps
- * counting until enough newer volume dilutes it — it doesn't vanish when a fixed time window
- * slides past. Because each window ends at evaluation time, bounces that arrive hours after
- * their send are picked up by the next run automatically.
+ * bounce/complaint rate covers at least its most recent `targetVolume` sends AND at least the
+ * last `minWindowHours` — whichever reaches further back (walking hourly buckets backwards from
+ * the evaluation time, capped at `lookbackDays`). A weekly batch blast keeps counting until
+ * enough newer volume dilutes it, and a high-volume sender can't bury a bad morning under a few
+ * clean recent hours. Because each window ends at evaluation time, bounces that arrive hours
+ * after their send are picked up by the next run automatically.
  *
  * Runs as Temporal activities: the workflow fetches the team list once, then evaluates teams in
  * paced batches. All rows of a run share the workflow's `evaluatedAt`, and inserts are
@@ -126,10 +131,11 @@ export class EmailReputationService {
         const rows = await this.fetchHourlyEmailMetrics(teamIds, evaluatedAt)
         const { flows, sourceToFlow } = await this.resolveSources([...new Set(rows.map((r) => r.appSourceId))])
         const snapshots: SnapshotRow[] = []
+        const minWindowStart = Math.floor(Date.parse(evaluatedAt) / 1000) - this.config.minWindowHours * 3600
 
-        // Per-workflow: fold each source's hourly buckets into its workflow, then take the most
-        // recent targetVolume sends per workflow.
-        const workflowBuckets = new Map<string, Map<string, ReputationMetrics>>()
+        // Per-workflow: fold each source's hourly buckets into its workflow, then take each
+        // workflow's window (>= minWindowHours and >= targetVolume sends).
+        const workflowBuckets = new Map<string, Map<number, ReputationMetrics>>()
         for (const row of rows) {
             const flowId = sourceToFlow.get(row.appSourceId)
             if (!flowId) {
@@ -142,7 +148,7 @@ export class EmailReputationService {
             if (!flow) {
                 continue
             }
-            const totals = accumulateRecentVolume(buckets, this.config.targetVolume)
+            const totals = accumulateRecentVolume(buckets, this.config.targetVolume, minWindowStart)
             const { state, bounceRate, complaintRate } = classifyReputation(totals, this.config.thresholds)
             snapshots.push({
                 teamId: flow.team_id,
@@ -159,7 +165,7 @@ export class EmailReputationService {
         // Per-team: the aggregate takes its own most-recent-volume window over ALL the team's
         // email (including sources that no longer resolve to a workflow), independent of the
         // per-workflow windows — mirroring the account-level rate SES computes.
-        const teamBuckets = new Map<number, Map<string, ReputationMetrics>>()
+        const teamBuckets = new Map<number, Map<number, ReputationMetrics>>()
         for (const row of rows) {
             addBucket(getOrCreate(teamBuckets, row.teamId), row)
         }
@@ -169,7 +175,7 @@ export class EmailReputationService {
             // via a recent nonzero snapshot, so record an explicit "no recent volume" row rather
             // than leaving a stale rate presented as current.
             const totals = buckets
-                ? accumulateRecentVolume(buckets, this.config.targetVolume)
+                ? accumulateRecentVolume(buckets, this.config.targetVolume, minWindowStart)
                 : { sent: 0, bounced: 0, complained: 0 }
             const { state, bounceRate, complaintRate } = classifyReputation(totals, this.config.thresholds)
             snapshots.push({
@@ -213,7 +219,7 @@ export class EmailReputationService {
                 SELECT
                     team_id,
                     app_source_id,
-                    toStartOfHour(timestamp) AS hour_bucket,
+                    toUnixTimestamp(toStartOfHour(timestamp)) AS hour_bucket,
                     sumIf(count, metric_name = 'email_sent') AS sent,
                     sumIf(count, metric_name = 'email_bounced') AS bounced,
                     sumIf(count, metric_name = 'email_blocked') AS complained
@@ -232,7 +238,7 @@ export class EmailReputationService {
         const rows = await result.json<{
             team_id: number | string
             app_source_id: string
-            hour_bucket: string
+            hour_bucket: number | string
             sent: number | string
             bounced: number | string
             complained: number | string
@@ -241,7 +247,7 @@ export class EmailReputationService {
         return rows.map((row) => ({
             teamId: Number(row.team_id),
             appSourceId: row.app_source_id,
-            hourBucket: row.hour_bucket,
+            hourBucket: Number(row.hour_bucket),
             sent: Number(row.sent),
             bounced: Number(row.bounced),
             complained: Number(row.complained),
@@ -334,7 +340,7 @@ export class EmailReputationService {
     }
 }
 
-function getOrCreate<K>(map: Map<K, Map<string, ReputationMetrics>>, key: K): Map<string, ReputationMetrics> {
+function getOrCreate<K>(map: Map<K, Map<number, ReputationMetrics>>, key: K): Map<number, ReputationMetrics> {
     let value = map.get(key)
     if (!value) {
         value = new Map()
@@ -343,7 +349,7 @@ function getOrCreate<K>(map: Map<K, Map<string, ReputationMetrics>>, key: K): Ma
     return value
 }
 
-function addBucket(buckets: Map<string, ReputationMetrics>, row: HourlyEmailMetricsRow): void {
+function addBucket(buckets: Map<number, ReputationMetrics>, row: HourlyEmailMetricsRow): void {
     const acc = buckets.get(row.hourBucket) ?? { sent: 0, bounced: 0, complained: 0 }
     acc.sent += row.sent
     acc.bounced += row.bounced
@@ -352,24 +358,28 @@ function addBucket(buckets: Map<string, ReputationMetrics>, row: HourlyEmailMetr
 }
 
 /**
- * Walk hourly buckets newest-first, accumulating until the target send volume is reached (the
- * crossing bucket is included whole — hourly granularity). Bounce-only buckets newer than the
- * last sends are naturally included, which is how late-arriving bounces get counted.
+ * Walk hourly buckets (keyed by epoch seconds) newest-first. Every bucket at or after
+ * `minWindowStart` is included unconditionally — a high-volume sender is judged on at least that
+ * span, so a bad morning can't hide behind a few clean recent hours. Older buckets are then
+ * included until the target send volume is reached (the crossing bucket counts whole — hourly
+ * granularity), which is what stretches the window for low-volume senders. Bounce-only buckets
+ * are naturally included, which is how late-arriving bounces get counted.
  */
 export function accumulateRecentVolume(
-    buckets: Map<string, ReputationMetrics>,
-    targetVolume: number
+    buckets: Map<number, ReputationMetrics>,
+    targetVolume: number,
+    minWindowStart: number
 ): ReputationMetrics {
-    const hours = [...buckets.keys()].sort().reverse()
+    const hours = [...buckets.keys()].sort((a, b) => b - a)
     const totals: ReputationMetrics = { sent: 0, bounced: 0, complained: 0 }
     for (const hour of hours) {
+        if (hour < minWindowStart && totals.sent >= targetVolume) {
+            break
+        }
         const bucket = buckets.get(hour)!
         totals.sent += bucket.sent
         totals.bounced += bucket.bounced
         totals.complained += bucket.complained
-        if (totals.sent >= targetVolume) {
-            break
-        }
     }
     return totals
 }

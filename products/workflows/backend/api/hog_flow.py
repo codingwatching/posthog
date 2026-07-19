@@ -779,8 +779,9 @@ class EmailReputationSnapshotSerializer(serializers.ModelSerializer):
     emails_sent = serializers.IntegerField(
         read_only=True,
         help_text=(
-            "Emails in the evaluated volume: the target's most recent sends up to the configured "
-            "representative volume (SES-style), not a fixed time window. 0 means no recent sending."
+            "Emails in the evaluated window: at least the target's last day of sends and at least "
+            "the configured representative volume (SES-style), whichever covers more. 0 means no "
+            "recent sending."
         ),
     )
     evaluated_at = serializers.DateTimeField(
