@@ -22,12 +22,12 @@ describe('EmailReputationService', () => {
     let mockClickhouse: { query: jest.Mock }
     let teamId: number
 
-    const insertEmailFlow = async (status: HogFlow['status'] = 'active'): Promise<HogFlow> => {
+    const insertEmailFlow = async (): Promise<HogFlow> => {
         return await insertHogFlow(
             hub.postgres,
             new FixtureHogFlowBuilder()
                 .withTeamId(teamId)
-                .withStatus(status)
+                .withStatus('active')
                 .withWorkflow({
                     actions: {
                         trigger: { type: 'trigger', config: { type: 'event', filters: {} } },
@@ -120,32 +120,26 @@ describe('EmailReputationService', () => {
         expect(await getSnapshots()).toHaveLength(4)
     })
 
-    it('folds batch-job metrics into the parent workflow and excludes inactive flows and orphans everywhere', async () => {
+    it('folds batch-job metrics into the parent workflow and counts orphans only at team level', async () => {
         const flow = await insertEmailFlow()
-        const archivedFlow = await insertEmailFlow('archived')
         const batchJobId = await insertBatchJob(flow.id)
         mockMetrics([
             { teamId, appSourceId: flow.id, sent: 400, bounced: 4, complained: 0 },
             { teamId, appSourceId: batchJobId, sent: 600, bounced: 20, complained: 0 },
-            // Disabled sender: terrible rates must not touch the workflow list or the team aggregate
-            { teamId, appSourceId: archivedFlow.id, sent: 1000, bounced: 900, complained: 50 },
-            // Matches neither a flow nor a batch job (e.g. deleted flow): excluded entirely
+            // Matches neither a flow nor a batch job (e.g. deleted flow): team aggregate only
             { teamId, appSourceId: randomUUID(), sent: 100, bounced: 100, complained: 0 },
         ])
 
         await service.evaluateTeamBatch([teamId], EVALUATED_AT)
 
         const rows = await getSnapshots()
-        expect(rows.find((r) => r.hog_flow_id === archivedFlow.id)).toBeUndefined()
-
         const workflowRow = rows.find((r) => r.hog_flow_id === flow.id)
         // 400+600 sent, 4+20 bounced = 2.4% → warning
         expect(workflowRow).toMatchObject({ state: 'warning', emails_sent: '1000' })
         expect(workflowRow.bounce_rate).toBeCloseTo(0.024)
 
-        // Team aggregate = active workflows only: same 1000/24 as the single active flow
         const teamRow = rows.find((r) => r.hog_flow_id === null)
-        expect(teamRow).toMatchObject({ state: 'warning', emails_sent: '1000' })
-        expect(teamRow.bounce_rate).toBeCloseTo(0.024)
+        // Orphan row included: 1100 sent, 124 bounced ≈ 11.3% → critical
+        expect(teamRow).toMatchObject({ state: 'critical', emails_sent: '1100' })
     })
 })

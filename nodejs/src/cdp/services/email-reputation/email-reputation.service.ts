@@ -100,11 +100,6 @@ export class EmailReputationService {
         const { flows, metricsByFlowId } = await this.attributeMetricsToFlows(metrics)
         const snapshots: SnapshotRow[] = []
 
-        // The team aggregate only counts metrics attributed to active workflows — the same set
-        // evaluated per workflow below — so disabled/archived senders and deleted flows can't drag
-        // down (or prop up) the tenant's reputation for email they are no longer sending.
-        const metricsByTeam = new Map<number, { sent: number; bounced: number; complained: number }>()
-
         for (const [flowId, flowMetrics] of metricsByFlowId) {
             const flow = flows.get(flowId)
             if (!flow) {
@@ -121,12 +116,15 @@ export class EmailReputationService {
                 emailsSent: flowMetrics.sent,
             })
             summary.workflowsEvaluated++
+        }
 
-            const acc = metricsByTeam.get(flow.team_id) ?? { sent: 0, bounced: 0, complained: 0 }
-            acc.sent += flowMetrics.sent
-            acc.bounced += flowMetrics.bounced
-            acc.complained += flowMetrics.complained
-            metricsByTeam.set(flow.team_id, acc)
+        const metricsByTeam = new Map<number, { sent: number; bounced: number; complained: number }>()
+        for (const metric of metrics) {
+            const acc = metricsByTeam.get(metric.teamId) ?? { sent: 0, bounced: 0, complained: 0 }
+            acc.sent += metric.sent
+            acc.bounced += metric.bounced
+            acc.complained += metric.complained
+            metricsByTeam.set(metric.teamId, acc)
         }
         for (const [teamId, totals] of metricsByTeam) {
             const { state, bounceRate, complaintRate } = classifyReputation(totals, this.config.thresholds)
@@ -204,12 +202,11 @@ export class EmailReputationService {
     }
 
     /**
-     * Resolve metric rows to ACTIVE workflows and aggregate per workflow. Batch-triggered runs
-     * record metrics under the batch-job id (`parentRunId`), not the workflow id — and batch
-     * broadcasts are the highest-risk email blasts — so unmatched app_source_ids are resolved
-     * through workflows_hogflowbatchjob and folded into the parent workflow's numbers. Ids matching
-     * no active workflow (disabled/archived flows, deleted flows, plain hog functions) are excluded
-     * from evaluation entirely — they don't count toward the team aggregate either.
+     * Resolve metric rows to workflows and aggregate per workflow. Batch-triggered runs record
+     * metrics under the batch-job id (`parentRunId`), not the workflow id — and batch broadcasts are
+     * the highest-risk email blasts — so unmatched app_source_ids are resolved through
+     * posthog_hogflowbatchjob and folded into the parent workflow's numbers. Ids matching neither
+     * (deleted flows, plain hog functions) still count toward the team aggregate.
      */
     private async attributeMetricsToFlows(metrics: EmailMetricsRow[]): Promise<{
         flows: Map<string, HogFlowRow>
@@ -253,14 +250,13 @@ export class EmailReputationService {
         return new Map(result.rows.map((row) => [row.id, row.hog_flow_id]))
     }
 
-    /** Only active workflows: disabled/archived senders drop out of attribution and the team aggregate. */
     private async fetchHogFlows(ids: string[]): Promise<Map<string, HogFlowRow>> {
         if (ids.length === 0) {
             return new Map()
         }
         const result = await this.postgres.query<HogFlowRow>(
             PostgresUse.COMMON_READ,
-            `SELECT id, team_id FROM posthog_hogflow WHERE id = ANY($1) AND status = 'active'`,
+            `SELECT id, team_id FROM posthog_hogflow WHERE id = ANY($1)`,
             [ids],
             'emailReputationFetchHogFlows'
         )
